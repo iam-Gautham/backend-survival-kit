@@ -2,47 +2,44 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 
-import { Repository, User } from "./repositories/Repository";
-import { InMemoryRepository } from "./repositories/InMemoryRepository";
-import { PostgresRepository } from "./repositories/PostgresRepository";
-import { UserService } from "./services/UserService";
-import { createUserRouter } from "./routes/userRoutes";
+// Import SQLite database initialization module
+import { initDatabase } from "./db/database";
 
+// Import Task domain components (Repository, Service, Routes)
+import { TaskRepository } from "./repositories/TaskRepository";
+import { TaskService } from "./services/TaskService";
+import { createTaskRouter } from "./routes/taskRoutes";
+
+// Load environment variables from .env file
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const REPO_TYPE = process.env.REPO_TYPE || "postgres";
 
-// Repository Selection based on environment variable
-let repository: Repository<User>;
+// Requirement 2, 3, & 4: Automatically initialize tasks.db, create tasks table if not exists, and seed 3 tasks if empty
+console.log("⚙️ Initializing SQLite database...");
+initDatabase();
 
-if (REPO_TYPE.toLowerCase() === "in-memory") {
-  console.log("⚡ Using InMemoryRepository persistence");
-  repository = new InMemoryRepository();
-} else {
-  console.log("🐘 Using PostgresRepository persistence");
-  repository = new PostgresRepository();
-}
+// Instantiate Repository and Service following Dependency Injection pattern
+const taskRepository = new TaskRepository();
+const taskService = new TaskService(taskRepository);
 
-// Dependency Injection: Repository -> Service
-const userService = new UserService(repository);
-
-// Middleware
+// Global Middleware setup
 app.use(cors());
 app.use(express.json());
 
-// Healthcheck endpoint
+// Server healthcheck endpoint
 app.get("/health", (_req, res) => {
-  res.status(200).json({ status: "OK", repository: REPO_TYPE });
+  res.status(200).json({ status: "OK", database: "SQLite (better-sqlite3)" });
 });
 
-// User API Routes
-app.use("/users", createUserRouter(userService));
+// Requirement 5 & 9: Mount Task REST API routes at /tasks endpoint
+app.use("/tasks", createTaskRouter(taskService));
 
-app.listen(PORT, () => {
+// Start Express server
+const server = app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
-  console.log(`Active Repository implementation: ${repository.constructor.name}`);
+  console.log(`📋 Tasks API available at http://localhost:${PORT}/tasks`);
 });
 
 export default app;
